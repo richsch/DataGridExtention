@@ -49,6 +49,45 @@ define([
             // this.loaded();
         },
 
+        /**
+         * MWE, since the liveConnect does not work properly with bubbling en event propagion, we implement our own...
+         * @param {[type]} widget  [description]
+         * @param {[type]} node  [description]
+         * @param {[type]} event [description]
+         * @param {[type]} map of className -> function(node, event) -> boolean. (If false, further event are stopped)
+         */
+        liveConnect : function(widget, node, event, map) {
+            logger.debug("DataGridExtension.widget.DataGridExtension.liveConnect");
+
+            if (!node) {
+                throw "liveConnect: no node provided";
+            }
+
+            widget.connect(node, event, function (e) {
+                var currNode = e.target;
+                var matched = {}; //we already matched these, don't bubble.
+
+                while (currNode != node && currNode != null) {
+                    for (var clazz in map) {
+                        if (!(clazz in matched) && dojo.hasClass(currNode, clazz)) {
+                            //avoid a second match on the same selector
+                            matched[clazz] = true;
+
+                            //call the callback
+                            var res = map[clazz].call(widget, currNode, e);
+
+                            //stop the event!
+                            if (res === false) {
+                                e && e.stopPropagation(); // dojo.stopEvent(e);
+                                return;
+                            }
+                        }
+                    }
+                    currNode = currNode.parentNode;
+                }
+            });
+        },
+        
         setupInlineButtons: function() {
             var self = this; // needed in aspect function
 
@@ -91,13 +130,13 @@ define([
                     }
                 };
             });
-            self.grid.liveConnect(self.grid.gridBodyNode, "onclick", {
-                ".mx-button": lang.hitch(self, self.onclickEventInline),
-                ".mx-link": lang.hitch(self, self.onclickEventInline)
+            self.liveConnect(self.grid, self.grid.gridBodyNode, "onclick", {
+                "mx-button": lang.hitch(self, self.onclickEventInline),
+                "mx-link": lang.hitch(self, self.onclickEventInline)
             });
         },
 
-        onclickEventInline: function(evt) {
+        onclickEventInline: function(element, evt) {
             event.stop(evt);
             var tdNode = query(evt.target).closest("td")[0];
             var btnNode = query(evt.target).closest(".mx-link, .mx-button")[0];
